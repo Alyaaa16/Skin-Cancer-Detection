@@ -1,0 +1,100 @@
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+import cv2
+
+# Function to remove glare from an image
+def remove_glare(image):
+    # Convert to HSV color space
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    _, _, v = cv2.split(hsv)  # Value channel (brightness)
+
+    # Threshold to detect bright spots (glare)
+    _, glare_mask = cv2.threshold(v, 200, 255, cv2.THRESH_BINARY)
+
+    # Dilate the mask to cover surrounding glare areas
+    kernel = np.ones((5, 5), np.uint8)
+    glare_mask = cv2.dilate(glare_mask, kernel, iterations=2)
+
+    # Inpaint the glare regions
+    image_no_glare = cv2.inpaint(image, glare_mask, 3, cv2.INPAINT_NS)
+
+    return image_no_glare, glare_mask
+
+def remove_hair(image):
+    # Convert to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Apply black-hat morphological operation to detect dark hair
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (17, 17))
+    blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, kernel)
+
+    # Threshold to create hair mask
+    _, hair_mask = cv2.threshold(blackhat, 30, 255, cv2.THRESH_BINARY)
+
+    # Inpaint the hair regions
+    inpainted = cv2.inpaint(image, hair_mask, 3, cv2.INPAINT_TELEA)
+
+    return inpainted, hair_mask
+
+# Function to process images in a directory (hair and glare removal)
+def process_directory(directory, extensions=['.jpg', '.jpeg', '.png', '.bmp', '.tiff']):
+    processed_images = []
+    image_files = []
+
+    # Collect image files
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if any(file.lower().endswith(ext) for ext in extensions):
+                image_files.append(os.path.join(root, file))
+
+    print(f"Files found in {directory}: {image_files}")
+
+    # Process each image
+    for img_path in image_files:
+        # Read image
+        img = cv2.imread(img_path)
+        if img is None:
+            print(f"Failed to load {img_path}")
+            continue
+        # Remove hair
+        img_clean, hair_mask = remove_hair(img)
+
+        # Remove glare
+        img_no_glare, glare_mask = remove_glare(img_clean)
+
+
+        # Visualize (optional)
+        plt.figure(figsize=(15, 5))
+        plt.subplot(1, 5, 1)
+        plt.title("Original")
+        plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        plt.axis('off')
+        plt.subplot(1, 5, 2)
+        plt.title("Glare Mask")
+        plt.imshow(glare_mask, cmap='gray')
+        plt.axis('off')
+        plt.subplot(1, 5, 3)
+        plt.title("Glare Removed")
+        plt.imshow(cv2.cvtColor(img_no_glare, cv2.COLOR_BGR2RGB))
+        plt.axis('off')
+        plt.subplot(1, 5, 4)
+        plt.title("Hair Mask")
+        plt.imshow(hair_mask, cmap='gray')
+        plt.axis('off')
+        plt.subplot(1, 5, 5)
+        plt.title("Hair Removed")
+        plt.imshow(cv2.cvtColor(img_clean, cv2.COLOR_BGR2RGB))
+        plt.axis('off')
+        plt.show()
+
+    return processed_images
+
+# Create a deep copy of the dictionary to preserve the original data
+import copy
+train_processed_copy = copy.deepcopy(cancer_test_dir)
+
+# Process the directory and store results in train_processed
+train_processed = process_directory(train_processed_copy)
